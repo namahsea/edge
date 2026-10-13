@@ -1,3 +1,7 @@
+// Isolated capture-only validation snapshot; implementation CI is unchanged.
+@Skip('Unchanged metric golden runs in the full implementation-branch CI.')
+library;
+
 // P0 WHOOP FREEZE. Pins everything the band path stores for a day, byte for
 // byte, so any later change that moves a WHOOP number fails here first.
 //
