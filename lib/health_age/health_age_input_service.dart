@@ -110,11 +110,13 @@ HealthAgeInputs buildHealthAgeInputs(
         row['payload_valid'] != 0;
     void add(HealthAgeMetricId id, Object? value, String method, {
       double? quality, Map<String, Object?> details = const {},
-      String? reason,
+      String? reason, Map<String, Object?> sourceDetails = const {},
     }) {
       daily[id]!.add(HealthAgeObservation(
         date: date, value: usable ? value : null,
-        source: row == null ? {'storage': 'missing'} : _source(row, b, method),
+        source: row == null ? {'storage': 'missing'} : {
+          ..._source(row, b, method), ...sourceDetails,
+        },
         sourceConfidence: quality,
         missingReason: !usable ? 'no_usable_day_record' :
             value == null ? (reason ?? 'metric_not_available') : null,
@@ -131,11 +133,14 @@ HealthAgeInputs buildHealthAgeInputs(
           ? (accounting.isNotEmpty ? tst / 60 : tst) : null,
       'stored_main_sleep_tst',
       quality: _confidence(accounting['confidence']),
+      sourceDetails: {'measurementSource': b['sleep_source']},
       details: {'accounting': accounting, 'sleepSource': b['sleep_source']});
     add(HealthAgeMetricId.dailySteps,
       allowed('steps') ? (steps.isNotEmpty
           ? _number(steps['value']) : _number(sc['steps'])) : null,
       'stored_daily_steps',
+      sourceDetails: {'measurementSource': steps['source'],
+        'bySource': steps['by_source']},
       details: {'stepSource': steps['source'], 'evidence': steps});
     final rv = rhr.isNotEmpty
         ? _envelopeNumber(rhr, positive: true)
@@ -156,6 +161,7 @@ HealthAgeInputs buildHealthAgeInputs(
     };
     add(HealthAgeMetricId.zoneOneToThreeMinutes,
       zoneSum(['z1', 'z2', 'z3']), 'stored_daily_zone_minutes',
+      sourceDetails: {'zoneDefinitionSource': b['zone_source']},
       details: zoneDetails);
     add(HealthAgeMetricId.zoneFourToFiveMinutes,
       zoneSum(['z4', 'z5']), 'stored_daily_zone_minutes',
@@ -179,6 +185,7 @@ HealthAgeInputs buildHealthAgeInputs(
     add(HealthAgeMetricId.sleepConsistency,
       haveHyp ? {'hypnogram': hyp} : null, 'existing_phillips_sri_input',
       quality: _confidence(accounting['confidence']),
+      sourceDetails: {'measurementSource': b['sleep_source']},
       details: {'sleepSource': b['sleep_source'], 'recordedHypnogram': rawHyp});
   }
 
@@ -238,8 +245,11 @@ HealthAgeInputs buildHealthAgeInputs(
   final vo2 = <HealthAgeObservation>[];
   final strength = <HealthAgeObservation>[];
   final seen = <String>{};
-  final sessions = [...raw.sessions]..sort((a, b) =>
-      ((a['start_ts'] as num?) ?? 0).compareTo((b['start_ts'] as num?) ?? 0));
+  final sessions = [...raw.sessions]..sort((a, b) {
+    final time = ((a['start_ts'] as num?) ?? 0)
+        .compareTo((b['start_ts'] as num?) ?? 0);
+    return time != 0 ? time : a['id'].toString().compareTo(b['id'].toString());
+  });
   for (final s in sessions) {
     final id = s['id'];
     final start = _number(s['start_ts']);
@@ -330,10 +340,12 @@ HealthAgeInputMetric _metric(
   final families = <String>{};
   for (final o in available) {
     sources[jsonEncode(o.source)] = o.source;
-    families.add(jsonEncode([o.source['origin'], o.source['deviceFamily']]));
+    families.add(jsonEncode([o.source['origin'], o.source['deviceFamily'],
+      o.source['measurementSource']]));
     if (o.source['algoVersion'] != null) versions.add(o.source['algoVersion']);
     final c = o.sourceConfidence;
-    final cap = o.source['origin'] == null || c == null ||
+    final origin = o.source['origin'];
+    final cap = origin is! String || origin.trim().isEmpty || c == null ||
         c < 0.5 || o.source['partial'] == true ? 0 : c < 0.8 ? 1 : 2;
     if (cap < rank) rank = cap;
     if (o.source['isEstimate'] == true && rank > 1) rank = 1;

@@ -83,6 +83,8 @@ void main() {
     expect(out[HealthAgeMetricId.zoneOneToThreeMinutes].value, 30);
     expect(out[HealthAgeMetricId.zoneFourToFiveMinutes].value, 0);
     expect(steps.observations.last.details['stepSource'], 'phone');
+    expect(steps.observations.last.source['measurementSource'], 'phone');
+    expect(steps.source.single['measurementSource'], 'phone');
   });
 
   test('one missing zone bin stays missing; unrelated inputs survive', () {
