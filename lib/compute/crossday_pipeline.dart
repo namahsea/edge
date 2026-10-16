@@ -221,26 +221,7 @@ Map<String, dynamic> buildCrossDayBundle(
   final brv = ana.breathingRateVariability(brpm);
 
   // ── true Phillips SRI across days on a 1440-epoch (1-min) clock grid ───────
-  final (sri, sriDates) = _crossDaySri(days);
-  // SLP-08 — which two nights. `SriPair.dayIndex` indexes the SRI grid (one
-  // per day row, plus one pad per gap) and nothing else (the analytics never
-  // sees a date), so here is the only place
-  // it can be resolved into the two nights it compared. Pairs the mask left too
-  // thin were already dropped upstream, so a half-unobserved weekend cannot top
-  // the list for having no data.
-  //
-  // It is arithmetic, not a verdict: a decomposition of a number already on
-  // screen. It does not license telling anyone their weekend is harming them.
-  final sriJson = sri.toJson((v) => v.toJson());
-  final sriValue = sriJson['value'];
-  if (sriValue is Map) {
-    for (final p in ((sriValue['pairs'] as List?) ?? const []).whereType<Map>()) {
-      final d = (p['day_index'] as num?)?.toInt();
-      if (d == null || d <= 0 || d >= sriDates.length) continue;
-      p['prev_date'] = sriDates[d - 1];
-      p['date'] = sriDates[d];
-    }
-  }
+  final sriJson = sleepRegularityFromDays(days);
 
   // ── TS-12 — overreaching as TWO FACTS, not a score ────────────────────────
   // A coincidence detector over two outputs that already run every day. The
@@ -1024,6 +1005,36 @@ bool _isNextDay(String a, String b) {
   final db = DateTime.tryParse('${b}T00:00:00Z');
   if (da == null || db == null) return false;
   return db.difference(da).inDays == 1;
+}
+
+/// Existing gap-aware Phillips SRI and dated pair decomposition. Pure and
+/// isolate-safe; callers may supply a bounded calendar window. This is also
+/// the existing cross-day rollup's implementation, not a second SRI method.
+Map<String, dynamic> sleepRegularityFromDays(
+  List<Map<String, dynamic>> days,
+) {
+  final (sri, sriDates) = _crossDaySri(days);
+  // SLP-08 — which two nights. `SriPair.dayIndex` indexes the SRI grid (one
+  // per day row, plus one pad per gap) and nothing else (the analytics never
+  // sees a date), so here is the only place
+  // it can be resolved into the two nights it compared. Pairs the mask left too
+  // thin were already dropped upstream, so a half-unobserved weekend cannot top
+  // the list for having no data.
+  //
+  // It is arithmetic, not a verdict: a decomposition of a number already on
+  // screen. It does not license telling anyone their weekend is harming them.
+  final sriJson = sri.toJson((v) => v.toJson());
+  final sriValue = sriJson['value'];
+  if (sriValue is Map) {
+    for (final p in ((sriValue['pairs'] as List?) ?? const []).whereType<Map>()) {
+      final d = (p['day_index'] as num?)?.toInt();
+      if (d == null || d <= 0 || d >= sriDates.length) continue;
+      p['prev_date'] = sriDates[d - 1];
+      p['date'] = sriDates[d];
+    }
+  }
+
+  return sriJson;
 }
 
 /// Reconstruct a per-minute asleep series for each day on a 1440-epoch grid from

@@ -8628,6 +8628,81 @@ class LocalDb {
       'WHERE algo_version <= $_servedAlgoCeiling GROUP BY day_id) m '
       'ON r.day_id = m.day_id AND r.algo_version = m.v';
 
+  /// Read-only, date-bounded projections for the experimental input layer.
+  /// The served join is shared with every existing day reader. No raw replay.
+  static Future<List<Map<String, dynamic>>> healthAgeDayInputs(
+    String fromDay, String toDayExclusive,
+  ) async {
+    final db = await instance;
+    return db.rawQuery('''
+      SELECT r.day_id, r.algo_version, r.computed_at, r.skipped, r.partial,
+        r.finalized, r.rhr,
+        CASE WHEN v.algo_version = r.algo_version THEN v.source END AS source,
+        CASE WHEN v.algo_version = r.algo_version
+          THEN v.coverage_devices END AS coverage_devices,
+        CASE WHEN v.algo_version = r.algo_version
+          THEN v.priority_hash END AS priority_hash,
+        json_valid(r.payload_json) AS payload_valid,
+        CASE WHEN json_valid(r.payload_json) THEN json_object(
+          'device_family', json_extract(r.payload_json, '$.device_family'),
+          'source', json_extract(r.payload_json, '$.source'),
+          'scalars', json_extract(r.payload_json, '$.scalars'),
+          'steps', json_extract(r.payload_json, '$.steps'),
+          'sleep_source', json_extract(r.payload_json, '$.sleep_source'),
+          'sleep', json_extract(r.payload_json, '$.sleep'),
+          'clinical', json_object('resting_hr',
+            json_extract(r.payload_json, '$.clinical.resting_hr')),
+          'coverage', json_extract(r.payload_json, '$.coverage'),
+          'zones', json_extract(r.payload_json, '$.zones'),
+          'zone_source', json_extract(r.payload_json, '$.zone_source'),
+          'zone_max_hr', json_extract(r.payload_json, '$.zone_max_hr'),
+          'zone_lower_bpm', json_extract(r.payload_json, '$.zone_lower_bpm'),
+          'series', json_object('hypnogram',
+            json_extract(r.payload_json, '$.series.hypnogram'))
+        ) ELSE '{}' END AS payload_json,
+        (SELECT json_group_array(json_object(
+          'key', mm.key, 'method', mm.method,
+          'family', mm.family, 'class', mm.class))
+         FROM metric_method mm WHERE mm.date = r.day_id
+           AND v.algo_version = r.algo_version) AS methods_json
+      FROM day_result r
+      $_servedDayJoin
+      LEFT JOIN metric_series_version v ON v.date = r.day_id
+      WHERE r.day_id >= ? AND r.day_id < ? AND r.skipped = 0
+      ORDER BY r.day_id ASC
+    ''', [fromDay, toDayExclusive]);
+  }
+
+  /// Only completed, wholly contained sessions: never prorate a paused
+  /// workout's recorded duration across a window boundary.
+  static Future<List<Map<String, dynamic>>> healthAgeSessions(
+    int fromTs, int toTs,
+  ) async {
+    final db = await instance;
+    return withoutFlagOffScores(await db.query(
+      'sessions',
+      columns: ['id', 'start_ts', 'end_ts', 'type', 'status', 'duration_min',
+        'source', 'device_family', 'private', 'vo2max_estimate'],
+      where: "status = 'done' AND start_ts >= ? AND start_ts < ? "
+        'AND end_ts > start_ts AND end_ts <= ?',
+      whereArgs: [fromTs, toTs, toTs],
+      orderBy: 'start_ts ASC, id ASC',
+    ));
+  }
+
+  static Future<List<Map<String, dynamic>>> healthAgeStrengthSets(
+    int fromTs, int toTs,
+  ) async {
+    final db = await instance;
+    return db.rawQuery('''
+      SELECT st.* FROM strength_set st
+      JOIN sessions s ON s.id = st.session_id
+      WHERE s.status = 'done' AND s.start_ts >= ? AND s.start_ts < ?
+        AND s.end_ts > s.start_ts AND s.end_ts <= ?
+      ORDER BY s.start_ts ASC, st.session_id ASC, st.seq ASC
+    ''', [fromTs, toTs, toTs]);
+  }
+
   /// The result row for one day_id at the highest version this build serves
   /// (see [_servedAlgoCeiling]), with a normalized `date` alias for callers.
   /// Null if absent.
