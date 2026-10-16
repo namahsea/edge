@@ -164,7 +164,7 @@ void main() {
       double? vo2, num? minutes = 30}) => {
       'id': id, 'status': 'done', 'type': type, 'start_ts': ts,
       'end_ts': ts + 3600, 'duration_min': minutes, 'source': 'manual',
-      if (vo2 != null) 'vo2max_estimate': vo2,
+      'vo2max_estimate': ?vo2,
     };
     final a = session('a', start, vo2: 40);
     final b = session('b', start + 86400, vo2: 42);

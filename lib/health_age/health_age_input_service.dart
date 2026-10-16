@@ -79,7 +79,9 @@ HealthAgeInputs buildHealthAgeInputs(
     final prior = byDate[date];
     if (prior == null ||
         ((row['algo_version'] as num?) ?? 0) >
-            ((prior['algo_version'] as num?) ?? 0)) byDate[date] = row;
+            ((prior['algo_version'] as num?) ?? 0)) {
+      byDate[date] = row;
+    }
   }
   final daily = {
     for (final id in [
@@ -258,12 +260,14 @@ HealthAgeInputs buildHealthAgeInputs(
       'private': s['private'], 'recordedDurationMin': s['duration_min'],
     };
     final v = _number(s['vo2max_estimate'], positive: true);
-    if (v != null) vo2.add(HealthAgeObservation(
+    if (v != null) {
+      vo2.add(HealthAgeObservation(
       date: date, timestamp: start.toInt(), value: v,
       source: {...source, 'method': 'stored_submax_vo2max', 'isEstimate': true},
       details: {...context, 'timestampMeaning': 'session_start',
         'estimateTimestamp': null},
-    ));
+      ));
+    }
     final ss = sets[id] ?? const <Map<String, dynamic>>[];
     if (s['type'] == 'strength' || ss.isNotEmpty) {
       strength.add(HealthAgeObservation(
