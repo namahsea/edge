@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import '../data/db.dart';
 import 'health_age_inputs.dart';
 
@@ -32,27 +30,9 @@ class LocalHealthAgeInputRepository implements HealthAgeInputRepository {
         Map<String, dynamic>.from(currentProfile);
     final rows = await LocalDb.healthAgeDayInputs(
       window.fromDay, window.toDayExclusive);
-    final days = <Map<String, dynamic>>[];
-    for (final row in rows) {
-      // Malformed persisted JSON is one missing day, not a made-up zero or a
-      // reason to fail every other date in the window.
-      try {
-        final payload = jsonDecode(row['payload_json'] as String);
-        final methods = jsonDecode(row['methods_json'] as String);
-        days.add({
-          ...row,
-          'payload': payload is Map
-              ? payload.cast<String, dynamic>() : const <String, dynamic>{},
-          'methods': methods is List ? methods : const [],
-        });
-      } catch (_) {
-        days.add({...row, 'payload': const <String, dynamic>{},
-          'methods': const [], 'invalid_payload': true});
-      }
-    }
     return HealthAgeRawInputs(
       profile: profile,
-      days: days,
+      days: rows,
       sessions: await LocalDb.healthAgeSessions(window.fromTs, window.toTs),
       strengthSets: await LocalDb.healthAgeStrengthSets(
         window.fromTs, window.toTs),

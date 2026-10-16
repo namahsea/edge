@@ -60,7 +60,7 @@ void main() {
     final out = buildHealthAgeInputs(window, raw);
     expect(out[HealthAgeMetricId.dailySteps].value, 100);
     expect(out[HealthAgeMetricId.dailySteps].observations.first.value, 0);
-    final series = ((raw.days.last['payload'] as Map)['series'] as Map);
+    final series = ((jsonDecode(raw.days.last['payload_json'] as String) as Map)['series'] as Map);
     expect(series.containsKey('hr_curve'), isFalse,
       reason: 'large unrelated curves are not loaded');
   });
@@ -77,7 +77,7 @@ void main() {
     });
     var raw = await repo().read(window);
     expect(raw.days.single['source'], isNull);
-    expect(raw.days.single['methods'], isEmpty);
+    expect(jsonDecode(raw.days.single['methods_json'] as String), isEmpty);
     expect(buildHealthAgeInputs(window, raw)[HealthAgeMetricId.dailySteps].value, 10);
     await db.update('metric_series_version', {
       'algo_version': kAlgoVersion, 'source': 'band'});

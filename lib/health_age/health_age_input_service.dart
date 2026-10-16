@@ -36,6 +36,20 @@ double? _envelopeNumber(Object? raw, {bool positive = false}) {
   if (m['confidence'] is num && (m['confidence'] as num) <= 0) return null;
   return _number(m['value'], positive: positive);
 }
+Map<String, dynamic>? _decodedDay(Map<String, dynamic>? row) {
+  if (row == null || row['payload'] is Map) return row;
+  try {
+    final payload = jsonDecode(row['payload_json'] as String);
+    final rawMethods = row['methods_json'];
+    final methods = rawMethods is String ? jsonDecode(rawMethods) : const [];
+    return {...row, 'payload': payload is Map ? payload : const {},
+      'methods': methods is List ? methods : const [],
+      'invalid_payload': payload is! Map};
+  } catch (_) {
+    return {...row, 'payload': const {}, 'methods': const [],
+      'invalid_payload': true};
+  }
+}
 Map<String, Object?> _source(
   Map<String, dynamic> row, Map<String, dynamic> bundle, String method,
 ) => {
@@ -77,7 +91,7 @@ HealthAgeInputs buildHealthAgeInputs(
   };
   final sriDays = <Map<String, dynamic>>[];
   for (final date in dates) {
-    final row = byDate[date];
+    final row = _decodedDay(byDate[date]);
     final b = _map(row?['payload']);
     final sc = _map(b['scalars']);
     final sleep = _map(b['sleep']);
